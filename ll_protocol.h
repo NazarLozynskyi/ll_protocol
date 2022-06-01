@@ -162,7 +162,8 @@ void receiver_node(uint8_t* byte_stream, size_t byte_stream_size)
 #include <stdbool.h>
 
 
-#define MESSAGE_SIZE   (size_t)12
+#define MESSAGE_SIZE          (size_t)5
+#define MAX_BYTE_STREAM_SIZE  (size_t)(MESSAGE_SIZE * 2 + 2)
 
 #define BEGIN_BYTE    (uint8_t)0xAA
 #define END_BYTE      (uint8_t)0xBB
@@ -170,8 +171,8 @@ void receiver_node(uint8_t* byte_stream, size_t byte_stream_size)
 
 typedef enum
 {
-    LL_PROTOCOL_ERR_MESSAGE_TOO_SHORT,
-    LL_PROTOCOL_ERR_MESSAGE_TOO_LONG
+    LL_PROTOCOL_ERR_MESSAGE_TOO_SHORT, //message has started with BEGIN_BYTE but has ended too early with END_BYTE
+    LL_PROTOCOL_ERR_MESSAGE_TOO_LONG   //message started with BEGIN_BYTE but hasn't end with END_BYTE after last byte of message came
 } ll_protocol_err_t;
 
 
@@ -203,18 +204,16 @@ bool ll_serialize(
     uint8_t* const data_out     // array where result must be put
 );
 
-/*
- * This function parses bytes stream. When message is detected it
- * calls "ll_message_ready_cb" function. When error in bytes stream
- * detected it calls "ll_error_cb" function.
- *
- * Returns "true" on success and "false" on fail.
+/**
+ * @brief This function parses bytes stream. When message is detected it
+ * calls "data_ready_cb" function. When error in bytes stream
+ * detected it calls "error_cb" function.
  *
  * If in bytes stream remain bytes which were not parsed - this
  * function writes in "start_of_remainder" position in "byte_stream"
  * where these bytes started. If all bytes from bytes stream were parsed
  * then "start_of_remainder" must be equal to [byte_stream_size + 1]. If
- * If none of the bytes in bytes stream were parsed then "start_of_remainder"
+ * none of the bytes in bytes stream were parsed then "start_of_remainder"
  * equals to zero. NOTE. There can be only two situations with remainder:
  * 1) none of the bytes were parsed; 2) first bytes was parsed and last remains.
  * That means that the end of remainder always ends in [byte_stream_size - 1]
@@ -222,36 +221,35 @@ bool ll_serialize(
  *
  * Logic of remainder manipulating must be implemented by you. This function
  * only points to position of start of remainder.
+ *
+ * @param byte_stream byte stream which must be deserialized
+ * @param byte_stream_size byte stream size
+ * @param start_of_remainder position of start of remainder in "byte_stream"
+ * after deserializing
+ * @param context context for multitasking
+ *
+ * @param data_ready_cb this function is called by "ll_deserialize" every time
+ * when new message is detected, if data_ready_cb == NULL - do nothing
+ *
+ * @param error_cb this function is called by "ll_deserialize" every time when
+ * error in bytes stream but errors such as wrong bytes between messages which
+ * not started with BEGIN_BYTE will not be catched, if error_cb == NULL - do nothing
+ *
+ * @return "true" on success and "false" on fail.
  */
 bool ll_deserialize(
-    uint8_t* byte_stream,       //byte stream which must be deserialized
-    size_t byte_stream_size,    //byte stream size
-    size_t* start_of_remainder  //position of start of remainder in "byte_stream" after deserializing
-);
-
-/*
- * This function is called by "ll_deserialize" every time when new message is detected.
- *
- * You must define this function by yourself.
- */
-void ll_message_ready_cb(
-    uint8_t* const message      //incoming message to process with size of MESSAGE_SIZE
-);
-
-/*
- * This function is called by "ll_deserialize" every time when error in bytes stream
- * happen. It catches only two errors:
- * 1) [LL_PROTOCOL_ERR_MESSAGE_TOO_SHORT] - message has started with BEGIN_BYTE but
- * has ended too early with END_BYTE;
- * 2) [LL_PROTOCOL_ERR_MESSAGE_TOO_LONG] - message started with BEGIN_BYTE but
- * hasn't end with END_BYTE after last byte of message came.
- * Errors such as wrong bytes between messages which not started
- * with BEGIN_BYTE will not be catched.
- *
- * You must define this function by yourself.
- */
-void ll_error_cb(
-    ll_protocol_err_t error     //error code
+    uint8_t* byte_stream,
+    size_t byte_stream_size,
+    size_t* start_of_remainder,
+    void* context,
+    void (*data_ready_cb)(
+        uint8_t* message,          //incoming message to process with size of MESSAGE_SIZE
+        void* context              //context for multitasking
+    ),
+    void (*error_cb)(
+        ll_protocol_err_t error,   //type of error
+        void* context              //context for multitasking
+    )
 );
 
 #endif // LL_PROTOCOL_H

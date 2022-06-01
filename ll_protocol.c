@@ -1,9 +1,6 @@
 #include "ll_protocol.h"
 
 
-static uint8_t message[MESSAGE_SIZE];
-
-
 size_t ll_sizeof_serialized(uint8_t* const data)
 {
     //+2 is for BEGIN_BYTE at the beginning and END_BYTE at the end of message
@@ -53,12 +50,19 @@ bool ll_serialize(uint8_t* const data_in, uint8_t* const data_out)
     return true;
 }
 
-bool ll_deserialize(uint8_t* const byte_stream, size_t byte_stream_size, size_t* const start_of_remainder)
+bool ll_deserialize(uint8_t* const byte_stream,
+                    size_t byte_stream_size,
+                    size_t* const start_of_remainder,
+                    void* context,
+                    void (*data_ready_cb)(uint8_t* message, void* context),
+                    void (*error_cb)(ll_protocol_err_t error, void* context))
 {
     if(byte_stream == NULL || start_of_remainder == NULL)
     {
         return false;
     }
+
+    uint8_t message[MESSAGE_SIZE];
 
     *start_of_remainder = 0;
     bool message_opened = false;
@@ -90,12 +94,18 @@ bool ll_deserialize(uint8_t* const byte_stream, size_t byte_stream_size, size_t*
             message_opened = false;
             if(byte == END_BYTE)
             {
-                ll_message_ready_cb(message);
+                if(data_ready_cb)
+                {
+                    (data_ready_cb)(message, context);
+                }
                 *start_of_remainder = i + 1;
             }
             else
             {
-                ll_error_cb(LL_PROTOCOL_ERR_MESSAGE_TOO_LONG);
+                if(error_cb)
+                {
+                    (error_cb)(LL_PROTOCOL_ERR_MESSAGE_TOO_LONG, context);
+                }
                 *start_of_remainder = i;
             }
             message_iter = 0;
@@ -111,7 +121,10 @@ bool ll_deserialize(uint8_t* const byte_stream, size_t byte_stream_size, size_t*
             reject = false;
             message_iter = 0;
             *start_of_remainder = i + 1;
-            ll_error_cb(LL_PROTOCOL_ERR_MESSAGE_TOO_SHORT);
+            if(error_cb)
+            {
+                (error_cb)(LL_PROTOCOL_ERR_MESSAGE_TOO_SHORT, context);
+            }
         }
 
         //it seems that it can be optimized
