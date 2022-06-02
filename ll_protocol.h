@@ -161,8 +161,11 @@ void receiver_node(uint8_t* byte_stream, size_t byte_stream_size)
 #include <stdlib.h>
 #include <stdbool.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif // __cplusplus
 
-#define MESSAGE_SIZE          (size_t)5
+#define MESSAGE_SIZE          (size_t)2
 #define MAX_BYTE_STREAM_SIZE  (size_t)(MESSAGE_SIZE * 2 + 2)
 
 #define BEGIN_BYTE    (uint8_t)0xAA
@@ -251,5 +254,9 @@ bool ll_deserialize(
         void* context              //context for multitasking
     )
 );
+
+#ifdef __cplusplus
+} // extern "C"
+#endif // __cplusplus
 
 #endif // LL_PROTOCOL_H
